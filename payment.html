@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trendspy — Fashion Checkout</title>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getDatabase, ref, set } 
+  from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "trendspy-3ba6d.firebaseapp.com",
+  databaseURL: "https://trendspy-3ba6d-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "trendspy-3ba6d",
+  storageBucket: "trendspy-3ba6d.appspot.com",
+  messagingSenderId: "1064401414241",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const payNow = document.getElementById('payNow');
+const successMsg = document.getElementById('successMsg');
+const orderSummary = document.getElementById('orderSummary');
+const addressModal = document.getElementById('addressModal');
+const addressInput = document.getElementById('deliveryAddress');
+const addressSubmit = document.getElementById('submitAddress');
+const closeModal = document.getElementById('closeModal');
+
+let deliveryAddress = "";
+const currentOrder = JSON.parse(localStorage.getItem('currentOrder') || 'null');
+const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+if(!currentOrder){
+  orderSummary.innerHTML = "<div>No active order found.</div>";
+  payNow.disabled = true;
+} else {
+  orderSummary.innerHTML = `
+    <div><b>Order ID</b><span>${currentOrder.id}</span></div>
+    <div><b>Name</b><span>${user?.name || 'Guest'}</span></div>
+    <div><b>Contact</b><span>${user?.contact || 'N/A'}</span></div>
+    <div><b>Total</b><span>${currentOrder.total}</span></div>
+    <div><b>Status</b><span>${currentOrder.status}</span></div>
+  `;
+}
+
+/* ========== Helper ========== */
+async function saveOrderToFirebase(order){
+  if(!user?.contact){
+    alert("User not logged in properly!");
+    return;
+  }
+  await set(ref(db, `orders/${user.contact}/${order.id}`), order);
+}
+
+/* ========== Payment Trigger ========== */
+payNow.onclick = ()=>{
+  // Show address modal first
+  addressModal.style.display = "flex";
+};
+
+/* ========== Address Submission ========== */
+addressSubmit.onclick = ()=>{
+  deliveryAddress = addressInput.value.trim();
+  if(!deliveryAddress) return alert("Please enter your complete delivery address.");
+  addressModal.style.display = "none";
+  processPayment(); // move to payment after address provided
+};
+
+closeModal.onclick = ()=>addressModal.style.display = "none";
+
+/* ========== Main Payment Logic ========== */
+function processPayment(){
+  const mode = document.querySelector('input[name="paymode"]:checked')?.value;
+
+  // 🧾 COD Flow
+  if(mode === 'cod'){
+    currentOrder.status = "Pending";
+    currentOrder.paymentMethod = "Cash on Delivery";
+    currentOrder.paymentStatus = "Unpaid";
+    currentOrder.paymentId = "N/A";
+    currentOrder.ts = new Date().toLocaleString();
+    currentOrder.deliveryAddress = deliveryAddress;
+
+    saveOrderToFirebase(currentOrder).then(()=>{
+      localStorage.removeItem('cart');
+      localStorage.removeItem('currentOrder');
+      payNow.style.display='none';
+      successMsg.style.display='block';
+      successMsg.innerHTML = `
+        ✅ COD Order Placed Successfully!<br>
+        <small>Payment will be collected on delivery.</small><br><br>
+        <button class="primary" onclick="window.location.href='index.html#orders'">📦 View My Orders</button>`;
+      setTimeout(()=>window.location.href='index.html#orders',1500);
+    });
+    return;
+  }
+
+  // 💳 Razorpay Flow
+  const amount = parseInt(currentOrder.total.replace(/[₹,]/g,'')) * 100;
+  const options = {
+    key: "rzp_test_xxxxxxxxxxxxx", // replace with your Razorpay key
+    amount: amount,
+    currency: "INR",
+    name: "Trendspy Fashion",
+    description: "Order Payment",
+    image: "https://cdn-icons-png.flaticon.com/512/2977/2977817.png",
+    handler: async function(response){
+      currentOrder.status = "Paid";
+      currentOrder.paymentMethod = "Razorpay";
+      currentOrder.paymentId = response.razorpay_payment_id;
+      currentOrder.paymentStatus = "Paid";
+      currentOrder.ts = new Date().toLocaleString();
+      currentOrder.deliveryAddress = deliveryAddress;
+
+      await saveOrderToFirebase(currentOrder);
+      localStorage.removeItem('cart');
+      localStorage.removeItem('currentOrder');
+      payNow.style.display='none';
+      successMsg.style.display='block';
+      successMsg.innerHTML = `
+        ✅ Payment Successful!<br><br>
+        <button class="primary" onclick="window.location.href='index.html#orders'">📦 View My Orders</button>`;
+      setTimeout(()=>window.location.href='index.html#orders',1500);
+    },
+    prefill: { name:user?.name||"Customer", contact:user?.contact||"" },
+    theme: { color:"#ec4899" }
+  };
+
+  const rzp = new Razorpay(options);
+  rzp.on('payment.failed', function (r){
+    alert("❌ Payment Failed!\nReason: "+r.error.description);
+  });
+  rzp.open();
+}
+</script>
+
+<style>
+:root {
+  --bg:#0b0f1e;
+  --card:rgba(255,255,255,0.06);
+  --accent:#ec4899;
+  --accent2:#8b5cf6;
+  --success:#22c55e;
+  --danger:#ef4444;
+  --muted:#a1a1aa;
+  font-family:'Poppins',sans-serif;
+  color:#f5f5f5;
+}
+body {
+  margin:0;
+  background:radial-gradient(circle at top, #1a1035 0%, #0a0f1f 100%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+}
+.card {
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:18px;
+  padding:28px;
+  width:95%;
+  max-width:440px;
+  box-shadow:0 0 25px rgba(236,72,153,0.15);
+  backdrop-filter:blur(10px);
+}
+h2 {
+  text-align:center;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  font-size:24px;
+  margin-bottom:18px;
+}
+.summary {
+  background:rgba(255,255,255,0.05);
+  padding:14px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.06);
+  margin-bottom:20px;
+}
+.summary div {
+  display:flex;
+  justify-content:space-between;
+  font-size:14px;
+  margin:4px 0;
+}
+.method {margin-top:15px;}
+.method label {
+  display:block;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.06);
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:8px;
+  cursor:pointer;
+  transition:0.3s;
+}
+.method label:hover {background:rgba(255,255,255,0.08);}
+input[type="radio"] {accent-color:var(--accent);margin-right:8px;}
+button {
+  width:100%;padding:12px;border-radius:10px;border:none;
+  cursor:pointer;font-weight:600;font-size:15px;margin-top:10px;transition:.3s;
+}
+button.primary {
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  color:#fff;
+  box-shadow:0 0 10px rgba(236,72,153,0.4);
+}
+button.primary:hover {filter:brightness(1.15);transform:translateY(-1px);}
+.success {text-align:center;color:var(--success);font-size:18px;font-weight:600;display:none;}
+footer {text-align:center;color:var(--muted);font-size:12px;margin-top:20px;}
+
+/* Address Modal */
+#addressModal {
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.6);
+  z-index:9999;
+}
+.modal-box {
+  background:white;
+  color:black;
+  padding:20px;
+  border-radius:12px;
+  width:90%;
+  max-width:400px;
+  text-align:center;
+}
+.modal-box input, .modal-box textarea {
+  width:90%;
+  margin:8px 0;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-family:inherit;
+}
+</style>
+</head>
+
+<body>
+<div class="card">
+  <h2>💳 Secure Fashion Checkout</h2>
+  <div id="orderSummary" class="summary"></div>
+
+  <div class="method">
+    <label><input type="radio" name="paymode" value="razorpay" checked> 💸 Pay Online (UPI / Card / Netbanking)</label>
+    <label><input type="radio" name="paymode" value="cod"> 🧾 Cash on Delivery (COD)</label>
+  </div>
+
+  <button class="primary" id="payNow">Proceed to Pay</button>
+
+  <div class="success" id="successMsg"></div>
+</div>
+
+<!-- Delivery Address Modal -->
+<div id="addressModal">
+  <div class="modal-box">
+    <h3>🚚 Enter Delivery Address</h3>
+    <textarea id="deliveryAddress" rows="4" placeholder="Flat No, Street, City, State, Pincode"></textarea>
+    <button class="primary" id="submitAddress">Continue</button>
+    <button id="closeModal">Cancel</button>
+  </div>
+</div>
+
+<footer>© 2025 Trendspy — Secure Fashion Checkout</footer>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trendspy — Admin Analytics Dashboard</title>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+:root {
+  --bg:#0c1022;
+  --panel:rgba(255,255,255,0.05);
+  --accent:#ec4899;
+  --accent2:#8b5cf6;
+  --success:#22c55e;
+  --danger:#ef4444;
+  --warn:#facc15;
+  --muted:#94a3b8;
+  --text:#e5e7eb;
+  font-family:'Poppins',sans-serif;
+}
+
+/* Light Theme */
+body.light {
+  --bg:#f9fafb;
+  --panel:#ffffff;
+  --text:#111827;
+  --muted:#4b5563;
+  background:linear-gradient(180deg,#f3f4f6,#e5e7eb);
+  color:var(--text);
+}
+
+/* General */
+body {
+  margin:0;
+  background:linear-gradient(180deg,#0c1022 0%,#090c1a 100%);
+  color:var(--text);
+  transition:background 0.5s ease, color 0.3s ease;
+}
+.container {max-width:1300px;margin:30px auto;padding:0 25px;}
+
+header {
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  background:var(--panel);
+  border:1px solid rgba(255,255,255,0.06);
+  padding:18px 25px;border-radius:16px;
+  box-shadow:0 0 25px rgba(236,72,153,0.15);
+}
+header .logo {font-weight:700;font-size:20px;color:var(--text);}
+header .actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#db-status {
+  font-size:13px;
+  font-weight:600;
+  padding:4px 8px;
+  border-radius:8px;
+  color:white;
+  background:#ef4444;
+}
+
+/* Inputs and Buttons */
+button, input, select {
+  border-radius:8px;
+  font-family:inherit;
+}
+button {
+  padding:8px 14px;
+  border:none;
+  cursor:pointer;
+  font-weight:600;
+}
+.primary {
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  color:#fff;
+  box-shadow:0 0 12px rgba(236,72,153,0.3);
+}
+.danger {
+  background:linear-gradient(90deg,#ef4444,#dc2626);
+  color:#fff;
+}
+.ghost {
+  background:transparent;
+  border:1px solid rgba(255,255,255,0.15);
+  color:var(--muted);
+}
+body.light .ghost {border-color:rgba(0,0,0,0.2);color:var(--text);}
+
+input[type="text"], select {
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--text);
+  width:220px;
+}
+body.light input[type="text"], body.light select {
+  border-color:rgba(0,0,0,0.1);
+  background:#fff;
+  color:var(--text);
+}
+
+section {margin-top:30px;}
+
+h2 {
+  font-size:20px;
+  font-weight:600;
+  margin-bottom:15px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+
+/* Toggle */
+.theme-toggle {
+  display:flex;align-items:center;cursor:pointer;
+  gap:6px;font-size:13px;font-weight:600;
+}
+.theme-toggle input{display:none;}
+.toggle-slider {
+  width:36px;height:18px;background:#555;border-radius:10px;
+  position:relative;transition:0.3s;
+}
+.toggle-slider::before {
+  content:"";position:absolute;width:14px;height:14px;
+  top:2px;left:2px;background:white;border-radius:50%;transition:0.3s;
+}
+input:checked + .toggle-slider {background:#ec4899;}
+input:checked + .toggle-slider::before {transform:translateX(18px);}
+
+/* Charts */
+.analytics {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:14px;
+  margin-top:20px;
+}
+canvas {
+  background:var(--panel);
+  border-radius:14px;
+  padding:8px;
+  height:180px !important;
+  box-shadow:0 0 10px rgba(236,72,153,0.15);
+}
+footer {
+  text-align:center;
+  margin-top:30px;
+  color:var(--muted);
+  font-size:12px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  padding-top:10px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <header>
+    <div>
+      <div class="logo">🧾 Trendspy Admin Dashboard</div>
+      <small style="color:var(--muted);">Real-Time Orders • Revenue • Insights</small><br>
+      <span id="db-status">Database: Connecting...</span>
+    </div>
+    <div class="actions">
+      <input type="text" id="search" placeholder="🔍 Search orders...">
+      <select id="filterStatus">
+        <option value="all">All</option>
+        <option value="Pending">Pending</option>
+        <option value="Accepted">Accepted</option>
+        <option value="Out for Delivery">Out for Delivery</option>
+        <option value="Delivered">Delivered</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+      <button class="ghost" id="refresh">🔁</button>
+      <button class="danger" id="clear">🗑</button>
+      <button class="primary" id="manageProducts">🛍 Manage Products</button>
+      <div class="theme-toggle">
+        <label>
+          <input type="checkbox" id="themeSwitch">
+          <div class="toggle-slider"></div>
+        </label>
+        <span id="themeLabel">Dark</span>
+      </div>
+      <button class="ghost" id="logout">Logout</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>📦 Orders Overview</h2>
+    <div id="orders"></div>
+  </section>
+
+  <section>
+    <h2>📊 Business Analytics</h2>
+    <div class="analytics">
+      <canvas id="statusChart"></canvas>
+      <canvas id="revenueChart"></canvas>
+      <canvas id="categoryChart"></canvas>
+      <canvas id="trendChart"></canvas>
+    </div>
+  </section>
+
+  <footer>© 2025 Trendspy | Official Admin Panel</footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getDatabase, ref, onValue, update, remove, set } 
+  from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+
+document.addEventListener("DOMContentLoaded", () => {
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY", // 🔹 Replace with actual key
+  authDomain: "trendspy-3ba6d.firebaseapp.com",
+  databaseURL: "https://trendspy-3ba6d-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "trendspy-3ba6d",
+  storageBucket: "trendspy-3ba6d.appspot.com",
+  messagingSenderId: "1064401414241",
+  appId: "YOUR_APP_ID" // 🔹 Replace with actual appId
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const dbStatus = document.getElementById("db-status");
+
+// 🔍 Connectivity Check
+(async ()=>{
+  try {
+    const testRef = ref(db, "admin_connectivity_test");
+    await set(testRef, { connected: true, time: new Date().toISOString() });
+    console.log("✅ Firebase Admin connected successfully!");
+    dbStatus.textContent = "Database: Connected ✅";
+    dbStatus.style.background = "#22c55e";
+  } catch (err) {
+    console.error("❌ Firebase connection failed:", err);
+    dbStatus.textContent = "Database: Disconnected ❌";
+    dbStatus.style.background = "#ef4444";
+    alert("❌ Firebase connection failed: " + err.message);
+  }
+})();
+
+const el=id=>document.getElementById(id);
+const trackingStages=['Pending','Accepted','Out for Delivery','Delivered'];
+let orders=[], filteredOrders=[];
+let charts={};
+
+/* Toast */
+function toast(m){
+  const t=document.createElement('div');
+  Object.assign(t.style,{position:'fixed',bottom:'16px',right:'16px',background:'rgba(0,0,0,0.85)',padding:'8px 12px',borderRadius:'8px',fontSize:'12px',zIndex:9999,color:'#fff'});
+  t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),1500);
+}
+
+/* Theme Handling */
+const themeSwitch = el('themeSwitch');
+const themeLabel = el('themeLabel');
+if(localStorage.getItem('theme')==='light'){
+  document.body.classList.add('light');
+  themeSwitch.checked=true;
+  themeLabel.textContent='Light';
+}
+themeSwitch.onchange=()=>{
+  document.body.classList.toggle('light',themeSwitch.checked);
+  themeLabel.textContent=themeSwitch.checked?'Light':'Dark';
+  localStorage.setItem('theme',themeSwitch.checked?'light':'dark');
+  renderCharts();
+};
+
+/* Redirect */
+el('manageProducts').onclick=()=>{
+  toast("Redirecting to Product Management...");
+  setTimeout(()=>window.location.href="import.html?auth=trendspy-admin",700);
+};
+
+/* Load Orders */
+function loadOrders(){
+  const ordersRef=ref(db,'orders');
+  onValue(ordersRef,snapshot=>{
+    orders=[];
+    snapshot.forEach(user=>{
+      user.forEach(order=>orders.push(order.val()));
+    });
+    filteredOrders=orders;
+    renderOrders();
+    renderCharts();
+  },err=>{
+    console.error("Error loading orders:",err);
+    dbStatus.textContent="Database: Error ❌";
+    dbStatus.style.background="#ef4444";
+  });
+}
+
+/* Render Orders */
+function renderOrders(){
+  const c=el('orders');c.innerHTML='';
+  if(!filteredOrders.length)return c.innerHTML='<div style="color:#aaa">No orders found.</div>';
+  filteredOrders.slice().reverse().forEach(o=>{
+    if(o.trackingStage===undefined)o.trackingStage=0;
+    const div=document.createElement('div');
+    div.className='card';
+    div.innerHTML=`
+      <div><b>${o.id}</b> — ${o.ts}</div>
+      <small>${o.user} (${o.contact})</small>
+      <div><b>Status:</b> <span class="status ${o.status?.toLowerCase()}">${o.status}</span></div>
+      <div><b>Total:</b> ${o.total}</div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="primary" onclick="window.nextStage('${o.contact}','${o.id}')">Next</button>
+        <button class="ghost" onclick="window.prevStage('${o.contact}','${o.id}')">Prev</button>
+        <button class="danger" onclick="window.cancelOrder('${o.contact}','${o.id}')">Cancel</button>
+      </div>`;
+    c.appendChild(div);
+  });
+}
+
+/* Charts */
+function renderCharts(){
+  const isLight=document.body.classList.contains('light');
+  const textColor=isLight?'#111827':'#fff';
+  const gridColor=isLight?'#d1d5db':'#1e293b';
+  const counts={Pending:0,Accepted:0,'Out for Delivery':0,Delivered:0,Cancelled:0};
+  let daily={},monthly={},categories={};
+  orders.forEach(o=>{
+    counts[o.status]=(counts[o.status]||0)+1;
+    if(o.status==='Delivered'){
+      const amt=parseInt((o.total||'0').replace(/[₹,]/g,''))||0;
+      const d=new Date(o.ts);
+      const day=d.toLocaleDateString();
+      const month=d.toLocaleString('default',{month:'short'});
+      daily[day]=(daily[day]||0)+amt;
+      monthly[month]=(monthly[month]||0)+amt;
+      Object.values(o.items||{}).forEach(i=>{
+        const cat=i.category||'Uncategorized';
+        categories[cat]=(categories[cat]||0)+(i.qty||1);
+      });
+    }
+  });
+  Object.values(charts).forEach(ch=>ch.destroy?.());
+  charts.status=new Chart(el('statusChart'),{type:'doughnut',data:{labels:Object.keys(counts),datasets:[{data:Object.values(counts),backgroundColor:['#facc15','#ec4899','#8b5cf6','#22c55e','#ef4444']}]},options:{plugins:{legend:{labels:{color:textColor,boxWidth:12,font:{size:10}}}},cutout:'70%'}});
+  charts.revenue=new Chart(el('revenueChart'),{type:'pie',data:{labels:Object.keys(monthly),datasets:[{data:Object.values(monthly),backgroundColor:['#22c55e','#3b82f6','#f97316','#ec4899','#a855f7','#14b8a6']}]},options:{plugins:{legend:{labels:{color:textColor,font:{size:10}}}}}});
+  charts.category=new Chart(el('categoryChart'),{type:'bar',data:{labels:Object.keys(categories),datasets:[{label:'Units Sold',data:Object.values(categories),backgroundColor:'#8b5cf6'}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:textColor,font:{size:9}},grid:{color:gridColor}},y:{ticks:{color:textColor,font:{size:9}},grid:{color:gridColor}}}}});
+  charts.trend=new Chart(el('trendChart'),{type:'line',data:{labels:Object.keys(daily),datasets:[{label:'Daily Revenue',data:Object.values(daily),borderColor:'#ec4899',tension:.4}]},options:{plugins:{legend:{labels:{color:textColor,font:{size:9}}}},scales:{x:{ticks:{color:textColor,font:{size:9}},grid:{color:gridColor}},y:{ticks:{color:textColor,font:{size:9}},grid:{color:gridColor}}}}});
+}
+
+/* Stage Control */
+window.nextStage=async(contact,id)=>{const o=orders.find(x=>x.id===id);if(!o)return;if(o.trackingStage<trackingStages.length-1)o.trackingStage++;o.status=trackingStages[o.trackingStage];await update(ref(db,`orders/${contact}/${id}`),o);toast(`Moved to ${o.status}`);};
+window.prevStage=async(contact,id)=>{const o=orders.find(x=>x.id===id);if(!o)return;if(o.trackingStage>0)o.trackingStage--;o.status=trackingStages[o.trackingStage];await update(ref(db,`orders/${contact}/${id}`),o);toast(`Reverted to ${o.status}`);};
+window.cancelOrder=async(contact,id)=>{const o=orders.find(x=>x.id===id);if(!o)return;const reason=prompt("Reason for cancellation:","Out of stock");o.status='Cancelled';o.trackingStage=0;o.remark=reason;await update(ref(db,`orders/${contact}/${id}`),o);toast("Order cancelled.");};
+
+/* Filters + Buttons */
+el('search').addEventListener('input',filterOrders);
+el('filterStatus').addEventListener('change',filterOrders);
+function filterOrders(){
+  const q=el('search').value.toLowerCase();
+  const st=el('filterStatus').value;
+  filteredOrders=orders.filter(o=>{
+    const matchText=(o.user?.toLowerCase().includes(q)||o.contact?.toLowerCase().includes(q)||o.id?.toLowerCase().includes(q));
+    const matchStatus=(st==='all'||o.status===st);
+    return matchText&&matchStatus;
+  });
+  renderOrders();
+}
+el('refresh').onclick=()=>location.reload();
+el('clear').onclick=async()=>{if(confirm("⚠️ Clear all orders?")){await remove(ref(db,'orders'));toast("Orders cleared!");}};
+el('logout').onclick=()=>{toast("Logging out...");setTimeout(()=>window.location.href='index.html',600);};
+
+loadOrders();
+});
+</script>
+</body>
+</html>
