@@ -300,16 +300,31 @@ function renderOrders(){
     if(o.trackingStage===undefined)o.trackingStage=0;
     const div=document.createElement('div');
     div.className='card';
-    div.innerHTML=`
-      <div><b>${o.id}</b> — ${o.ts}</div>
-      <small>${o.user} (${o.contact})</small>
-      <div><b>Status:</b> <span class="status ${o.status?.toLowerCase()}">${o.status}</span></div>
-      <div><b>Total:</b> ${o.total}</div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="primary" onclick="window.nextStage('${o.contact}','${o.id}')">Next</button>
-        <button class="ghost" onclick="window.prevStage('${o.contact}','${o.id}')">Prev</button>
-        <button class="danger" onclick="window.cancelOrder('${o.contact}','${o.id}')">Cancel</button>
-      </div>`;
+ div.innerHTML = `
+  <div><b>${o.id}</b> — ${o.ts}</div>
+  <small>${o.user} (${o.contact})</small>
+
+  <div><b>Status:</b> 
+      <span class="status ${o.status?.toLowerCase()}">${o.status}</span>
+  </div>
+
+  <div><b>Total:</b> ${o.total}</div>
+
+  <div><b>Address:</b> 
+      <span style="color:var(--muted);font-size:13px;">
+         ${o.deliveryAddress || "No address provided"}
+      </span>
+  </div>
+
+  ${o.remark ? `<div><b>Remark:</b> ${o.remark}</div>` : ''}
+
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="primary" onclick="window.nextStage('${o.contact}','${o.id}')">Next</button>
+      <button class="ghost" onclick="window.prevStage('${o.contact}','${o.id}')">Prev</button>
+      <button class="danger" onclick="window.cancelOrder('${o.contact}','${o.id}')">Cancel</button>
+  </div>
+`;
+
     c.appendChild(div);
   });
 }
